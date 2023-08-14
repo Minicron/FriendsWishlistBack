@@ -8,6 +8,7 @@ const { sequelize, WishlistUser, WishlistItem, Reservation} = require('./models'
 const User = require('./models/user');
 const Wishlist = require('./models/wishlist');
 const UserInvitation = require('./models/userInvitation');
+const PasswordRequest = require('./models/passwordRequest');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
@@ -173,6 +174,53 @@ app.post('/activate', async (req, res) => {
     }
 });
 
+app.post('/reset-password', async (req, res) => {
+    const { password, token } = req.body;
+
+    // Vérification des entrées
+    if (!password || !token) {
+        return res.status(400).send({ message: "Required fields are missing." });
+    }
+
+    try {
+
+        // Décodage du token
+        const decodedToken = jwt.verify(token, process.env.EMAIL_TOKEN_SECRET);
+        const userEmail = decodedToken.user_email;
+
+        // Vérifier l'invitation
+        const passwordRequest = await PasswordRequest.findOne({
+            where: { token: token, user_email: userEmail }
+        });
+
+        if (!passwordRequest) {
+            return res.status(400).send({ message: "Invalid or expired reset link." });
+        }
+
+        let user = await User.findOne({ where: { email: userEmail } });
+
+        if (!user) {
+            return res.status(404).send({ message: "User not found." });
+        }
+
+        // Enregistrer le nouveau mot de passe
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        // Supprimer la demande de mot de passe
+        await passwordRequest.destroy();
+
+        user.password = hashedPassword;
+        await user.save();
+
+        return res.json({ success: true, message: 'Password updated with success.' });
+
+    } catch (error) {
+        console.error("Error during activation:", error);
+        return res.status(500).send({ message: "Internal server error." });
+    }
+});
+
 
 // Route pour créer une wishlist
 app.post('/wishlist', verifyJWT, async (req, res) => {
@@ -246,6 +294,51 @@ app.post('/login', async (req, res) => {
     }
 });
 
+// Route pour récupéérer un mot de passe perdu
+app.post('/forget-password', async (req, res) => {
+
+    const user = await User.findOne({
+        where: { email: req.body.email },
+    });
+
+    if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+    } else {
+
+        const passwordRequest = await PasswordRequest.create({
+            user_id: user.id,
+            token: jwt.sign({ user_email: req.body.email }, process.env.EMAIL_TOKEN_SECRET, {
+                expiresIn: 60 * 60 * 24, // 24 hours
+            }),
+            user_email: req.body.email,
+            expirationDate: Date.now() + 60 * 60 * 24 * 1000, // 24 hours
+        });
+
+        const resetPasswordUrl = process.env.FRONT_END_URL + `/reset-password?resetPasswordToken=${passwordRequest.token}`;
+        const resetPasswordTemplate = fs.readFileSync(path.join(__dirname, 'email_template/resetPassword.html'), 'utf-8');
+        const emailContent = resetPasswordTemplate.replace("[USERNAME]", user.username).replace("[PWD_RESET_LINK]", resetPasswordUrl);
+
+        const mailOptions = {
+            from: process.env.EMAIL_FROM_MAIL,
+            to: req.body.email,
+            subject: 'Password reset request',
+            html: emailContent
+        };
+
+        transporter.sendMail(mailOptions, (error, info) => {
+            if (error) {
+                console.log(error);
+                return res.status(500).json({ message: 'Internal error. Please try again latter.' });
+            } else {
+                console.log('Email sent: ' + info.response);
+                return res.status(200).json({ success: true, message: 'Request sent' });
+            }
+        });
+
+        return res.status(200).json({ success: true, message: 'Email sent' });
+    }
+});
+
 // Route pour inviter un utilisateur à une wishlist
 app.post('/wishlist/invite/:wishlistId', verifyJWT, async (req, res) => {
 
@@ -283,7 +376,7 @@ app.post('/wishlist/invite/:wishlistId', verifyJWT, async (req, res) => {
 
         if (newInvitation) {
 
-            const activationUrl = process.env.FRONT_END_URL + `/activate?token=${newInvitation.token}`;
+            const activationUrl = process.env.FRONT_END_URL + `/activate?activationToken=${newInvitation.token}`;
             const inviteUserToWishlistTemplate = fs.readFileSync(path.join(__dirname, 'email_template/inviteUserToWishlistNewUser.html'), 'utf-8');
             const emailContent = inviteUserToWishlistTemplate.replace("[USERNAME]", newInvitation.user_email).replace("[ACTIVATION_LINK]", activationUrl);
 

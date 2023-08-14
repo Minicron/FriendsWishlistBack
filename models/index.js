@@ -5,6 +5,7 @@ const WishlistUser = require('./wishlistUser');
 const WishlistItem = require('./wishlistItem');
 const Reservation = require('./reservation');
 const UserInvitation = require('./userInvitation');
+const PasswordRequest = require('./passwordRequest');
 
 // Création des associations entre les modèles
 User.hasMany(Wishlist, { foreignKey: {name: 'auteur_id', allowNull: false,} }); // Un utilisateur peut avoir plusieurs Wishlists
@@ -29,6 +30,10 @@ WishlistItem.belongsTo(User, { as: 'ReservingUser', foreignKey: 'reservedBy' });
 Wishlist.hasMany(UserInvitation, { foreignKey: 'wishlist_id' });
 UserInvitation.belongsTo(Wishlist, { foreignKey: 'wishlist_id' });
 
+// Every password request is linked to a user
+User.hasMany(PasswordRequest, { foreignKey: 'user_id' });
+PasswordRequest.belongsTo(User, { foreignKey: 'user_id' });
+
 (async () => {
     try {
         await sequelize.sync();
@@ -44,5 +49,7 @@ module.exports = {
     Wishlist,
     WishlistUser,
     WishlistItem,
-    Reservation
+    Reservation,
+    UserInvitation,
+    PasswordRequest,
 }
