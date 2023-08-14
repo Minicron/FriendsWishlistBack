@@ -32,7 +32,7 @@ const WishlistItem = sequelize.define('WishlistItem', {
     reservedBy: {
         type: DataTypes.INTEGER,
         references: {
-            model: 'users',
+            model: 'Users',
             key: 'id',
         },
     },
