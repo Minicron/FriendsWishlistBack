@@ -93,6 +93,24 @@ app.post('/token', async (req, res) => {
 app.post('/signup', async (req, res) => {
 
     try {
+
+        // Vérification des entrées
+        if (!req.body.username || !req.body.password || !req.body.email) {
+            return res.status(400).send({ message: "Required fields are missing." });
+        }
+
+        // Vérifiez si le pseudo existe déjà
+        const usernameExists = await User.findOne({ where: { username: req.body.username } });
+        if (usernameExists) {
+            return res.status(400).send({ message: "Error: username or email already exists." });
+        }
+
+        // Vérifier si l'email existe déjà
+        const emailExists = await User.findOne({ where: { email: req.body.email } });
+        if (emailExists) {
+            return res.status(400).send({ message: "Error: username or email already exists." });
+        }
+
         const newUser = new User({
             username: req.body.username,
             password: req.body.password,
@@ -235,6 +253,11 @@ app.post('/wishlist/invite/:wishlistId', verifyJWT, async (req, res) => {
         where: { email: req.body.invitationMail },
     });
 
+    const wishlist = await Wishlist.findOne({
+        where: { id: req.params.wishlistId },
+        include: { model: User, attributes: ['id', 'username'] },
+    });
+
     // Check if the user exists
     if (!user) {
         console.log('User not found');
@@ -261,7 +284,7 @@ app.post('/wishlist/invite/:wishlistId', verifyJWT, async (req, res) => {
         if (newInvitation) {
 
             const activationUrl = process.env.FRONT_END_URL + `/activate?token=${newInvitation.token}`;
-            const inviteUserToWishlistTemplate = fs.readFileSync(path.join(__dirname, 'email_template/inviteUserToWishlist.html'), 'utf-8');
+            const inviteUserToWishlistTemplate = fs.readFileSync(path.join(__dirname, 'email_template/inviteUserToWishlistNewUser.html'), 'utf-8');
             const emailContent = inviteUserToWishlistTemplate.replace("[USERNAME]", newInvitation.user_email).replace("[ACTIVATION_LINK]", activationUrl);
 
             // Invitation created, send an email to confirm the invitation
@@ -283,30 +306,41 @@ app.post('/wishlist/invite/:wishlistId', verifyJWT, async (req, res) => {
             });
         }
     } else {
-        // User found, send en email to confirm the invitation
-        const mailOptions = {
-            from: 'montuy.alexxis@gmail.com',
-            to: req.body.invitationMail,
-            subject: 'Test Email from Node.js',
-            text: 'Hello! This is a test e-mail from our Node.js app!'
-        };
 
-        transporter.sendMail(mailOptions, (error, info) => {
-            if (error) {
-                console.log(error);
-            } else {
-                console.log('Email sent: ' + info.response);
-            }
-        });
+        try {
+            await Wishlist.addUser(req.params.wishlistId, user.id);
 
-        Wishlist.addUser(req.params.wishlistId, user.id , (err) => {
-            if (err) {
-                res.json({ success: false, message: 'Failed to add user to wishlist' });
-            } else {
-                res.json({ success: true, message: 'User added to wishlist' });
-            }
-        });
-        res.json({ success: true, message: 'User added to wishlist' });
+            const inviteUserToWishlistTemplate = fs.readFileSync(path.join(__dirname, 'email_template/inviteUserToWishlistUserExist.html'), 'utf-8');
+            const emailContent = inviteUserToWishlistTemplate
+                .replace("[USERNAME]", user.username)
+                .replace("[WEBSITE_URL]", process.env.FRONT_END_URL)
+                .replace("[SENDER]", wishlist.User.username)
+                .replace("[WISHLIST_NAME]", wishlist.name)
+            ;
+
+            // User found, send en email to confirm the invitation
+            const mailOptions = {
+                from: process.env.EMAIL_FROM_MAIL,
+                to: req.body.invitationMail,
+                subject: 'You \'ve been invited to a new wishlist',
+                html: emailContent
+            };
+
+            transporter.sendMail(mailOptions, (error, info) => {
+                if (error) {
+                    console.log(error);
+                    return res.status(500).json({ message: 'Internal error. Please try again latter.' });
+                } else {
+                    console.log('Email sent: ' + info.response);
+                    return res.status(200).json({ success: true, message: 'Invitation sent' });
+                }
+            });
+
+            res.json({ success: true, message: 'User added to wishlist' });
+        } catch (error) {
+            console.error('Error during invitation:', error);
+            res.status(500).json({ message: 'Internal server error' });
+        }
     }
 });
 
@@ -476,7 +510,7 @@ app.get('/user/wishlist', verifyJWT, async (req, res) => {
         }
 
         // Renvoie les wishlists de l'utilisateur en réponse
-        return res.json(userWithWishlists.Wishlists);
+        return res.status(200).json(userWithWishlists.Wishlists);
 
     } catch (error) {
         console.error('Erreur lors de la récupération des wishlists de l\'utilisateur :', error);
