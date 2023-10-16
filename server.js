@@ -50,6 +50,7 @@ const verifyJWT = (req, res, next) => {
         } else {
             // If the verification is successful, add the decoded token to the request object
             req.user = decodedToken;
+            console.log("Decoded JWT:", req.user);
             next();
         }
     });
@@ -649,33 +650,54 @@ app.get('/wishlist/:wishlistId/users', verifyJWT, async (req, res) => {
 
 // Route pour récupérer les items d'une wishlistUser
 app.get('/wishlist/:wishlistId/items', verifyJWT, async (req, res) => {
-
     try {
-
         const { wishlistId } = req.params;
+        const currentUserId = req.user.id;
+        console.log("Current User ID:", currentUserId);
 
-        // Récupérer tous les wishlistUser associéé à la wishlist
         const wishlistUsers = await WishlistUser.findAll({
-            where: { wishlist_id: wishlistId },
+            where: { wishlist_id: wishlistId }
         });
 
         let items = [];
 
-        // Pour chaque wishlistUsers, récupérer les items associés
         for (let wishlistUser of wishlistUsers) {
+            console.log("WishlistUser's User ID:", wishlistUser.UserId);
+
             const userItems = await WishlistItem.findAll({
                 where: { wishlistUser_id: wishlistUser.id },
                 include: [{
                     model: Reservation,
-                    include: [User] // Inclure l'utilisateur qui a réservé l'item
+                    include: [User]
                 }]
             });
 
-            // Ajouter les items associés à l'utilisateur actuel dans le tableau des items
-            items.push(...userItems);
+            let transformedItems = userItems.map(item => {
+                const plainItem = item.get({ plain: true });
+
+                // Ajoutez l'ID de l'utilisateur à chaque élément
+                plainItem.userId = wishlistUser.UserId;
+
+                // Si l'item appartient à l'utilisateur actuellement connecté, supprimez les informations de réservation
+                if (wishlistUser.UserId === currentUserId) {
+                    console.log("Matched User ID, trying to remove reservations...");
+
+                    // Supprimer le tableau Reservations
+                    delete plainItem.Reservations;
+
+                    // Supprimer également les propriétés reserved et reservedBy
+                    delete plainItem.reserved;
+                    delete plainItem.reservedBy;
+                    delete plainItem.bought;
+                }
+
+                return plainItem;
+            });
+
+            items.push(...transformedItems);
+
         }
 
-        // Renvoie les items de la wishlist en réponse
         return res.status(200).json(items);
 
     } catch (error) {
