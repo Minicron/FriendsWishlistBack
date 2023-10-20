@@ -256,11 +256,11 @@ app.post('/logout', (req, res) => {
 // Route pour se connecter (vérifier l'utilisateur et le mot de passe)
 app.post('/login', async (req, res) => {
 
-    const { username, password } = req.body;
+    const { email, password } = req.body;
 
     try {
 
-        const user = await User.findOne({ where: { username } });
+        const user = await User.findOne({ where: { email } });
         if (!user) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
