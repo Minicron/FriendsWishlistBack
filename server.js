@@ -272,7 +272,7 @@ app.post('/login', async (req, res) => {
 
         const id = user.id;
         const token = jwt.sign({ id }, process.env.SECRET_TOKEN, {
-            expiresIn: 300, // 5 minutes
+            expiresIn: 1500, // 25 minutes
         });
         const refreshToken = jwt.sign({ id }, process.env.REFRESH_TOKEN_SECRET, {
             expiresIn: '1d', // 1 jour
