@@ -464,6 +464,40 @@ app.post('/wishlist/:wishlistId/item', verifyJWT, async (req, res) => {
     }
 });
 
+// Route pour éditer une wishlist
+app.put('/wishlist/:wishlistId/item/:itemId', verifyJWT, async (req, res) => {
+    try {
+        const { wishlistId, itemId } = req.params;
+        const { name, description, url } = req.body;
+
+        const wishlistUser = await WishlistUser.findOne({
+            where: { wishlist_id: wishlistId, UserId: req.user.id },
+        });
+
+        if (!wishlistUser) {
+            return res.status(404).json({ message: 'Wishlist not found' });
+        } else {
+            const item = await WishlistItem.findOne({
+                where: { id: itemId, wishlistUser_id: wishlistUser.id },
+            });
+
+            if (!item) {
+                return res.status(404).json({ message: 'Item not found' });
+            }
+
+            item.itemName = name;
+            item.description = description;
+            item.url = url;
+            await item.save();
+
+            res.json({ success: true, message: 'Item updated successfully' });
+        }
+    } catch (error) {
+        console.error('Failed to update item:', error);
+        return res.status(500).json({ success: false, message: 'Failed to update item' });
+    }
+});
+
 // Route pour clôturer une wishlist
 app.put('/wishlist/:wishlistId/close', verifyJWT, async (req, res) => {
 
