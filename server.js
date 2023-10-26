@@ -773,6 +773,79 @@ app.delete('/reservation/:itemId', verifyJWT, async (req, res) => {
     }
 });
 
+app.delete('/item/:itemId', verifyJWT, async (req, res) => {
+    try {
+        const { itemId } = req.params;
+
+        // Vérifiez si l'item est déjà réservé
+        const reservation = await Reservation.findOne(
+            { where: { wishlistItem_id: itemId } }
+        );
+
+        const wishlistItem = await WishlistItem.findOne(
+            { where: { id: itemId } }
+        );
+
+        if (!reservation) {
+            await wishlistItem.destroy();
+            return res.send({ message: 'Deletion successfull.' });
+        } else {
+            // Delete the reservation and item
+            await reservation.destroy();
+            await wishlistItem.destroy();
+
+            return res.send({ message: 'Deletion successfull.' });
+        }
+    } catch (error) {
+        console.error('Erreur lors de la suppression de l\'item:', error);
+        return res.status(500).json({ message: 'Erreur lors de la suppression de l\'item'});
+    }
+});
+
+app.post('/wishlist/:wishlistId/addUser', verifyJWT, async (req, res) => {
+    try {
+        // Récupérer l'ID de la wishlist depuis l'URL
+        const wishlistId = req.params.wishlistId;
+        // Récupérer l'email de l'utilisateur depuis le corps de la requête
+        const { email } = req.body;
+
+        // Trouver l'utilisateur par son email
+        const user = await User.findOne({ where: { email } });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Trouver la wishlist
+        const wishlist = await Wishlist.findByPk(wishlistId);
+        if (!wishlist) {
+            return res.status(404).json({ message: 'Wishlist not found' });
+        }
+
+        // Vérifier si l'utilisateur est déjà dans la wishlist
+        const existingWishlistUser = await WishlistUser.findOne({
+            where: {
+                UserId: user.id,
+                Wishlist_id: wishlist.id,
+            },
+        });
+
+        if (existingWishlistUser) {
+            return res.status(400).json({ message: 'User already in the wishlist' });
+        }
+
+        // Ajouter l'utilisateur à la wishlist
+        await WishlistUser.create({
+            UserId: user.id,
+            wishlist_id: wishlist.id,
+        });
+
+        res.json({ message: 'User added to wishlist successfully' });
+    } catch (error) {
+        console.error('Failed to add user to wishlist:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 // Synchronise le modèle avec la base de données et démarre le serveur
 (async () => {
     try {
