@@ -9,6 +9,7 @@ const User = require('./models/user');
 const Wishlist = require('./models/wishlist');
 const UserInvitation = require('./models/userInvitation');
 const PasswordRequest = require('./models/passwordRequest');
+const Comment = require('./models/comment');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
@@ -845,6 +846,49 @@ app.post('/wishlist/:wishlistId/addUser', verifyJWT, async (req, res) => {
         res.status(500).json({ message: 'Internal server error' });
     }
 });
+
+app.post('/comments/add', verifyJWT, async (req, res) => {
+    try {
+        const { content, itemId } = req.body;
+        console.log(itemId);
+        const userId = req.user.id;  // Assurez-vous que l'ID de l'utilisateur est disponible
+
+        const newComment = await Comment.create({
+            content: content,
+            itemId: itemId,
+            userId: userId
+        });
+
+        res.status(201).json(newComment);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// 2. Obtenir tous les commentaires pour un item spécifique
+app.get('/comments/item/:itemId', (req, res) => {
+    const itemId = req.params.itemId;
+
+    Comment.getCommentsForItem(itemId, (comments) => {
+        res.status(200).json(comments);
+    });
+});
+
+// 3. Supprimer un commentaire
+app.delete('/comments/:commentId', (req, res) => {
+    const commentId = req.params.commentId;
+
+    Comment.destroy({
+        where: {
+            id: commentId
+        }
+    }).then(() => {
+        res.status(200).json({ message: 'Comment deleted successfully.' });
+    }).catch(err => {
+        res.status(500).json({ error: 'Failed to delete comment.' });
+    });
+});
+
 
 // Synchronise le modèle avec la base de données et démarre le serveur
 (async () => {
