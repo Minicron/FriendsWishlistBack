@@ -707,30 +707,29 @@ app.get('/wishlist/:wishlistId/items', verifyJWT, async (req, res) => {
                 }]
             });
 
-            let transformedItems = userItems.map(item => {
+            let transformedItems = await Promise.all(userItems.map(async (item) => {
                 const plainItem = item.get({ plain: true });
-
-                // Ajoutez l'ID de l'utilisateur à chaque élément
                 plainItem.userId = wishlistUser.UserId;
 
-                // Si l'item appartient à l'utilisateur actuellement connecté, supprimez les informations de réservation
+                // Compter les commentaires pour l'élément actuel
+                const commentCount = await Comment.count({
+                    where: { itemId: plainItem.id }
+                });
+
+                plainItem.nbComment = commentCount;  // Ajouter le nombre de commentaires
+
                 if (wishlistUser.UserId === currentUserId) {
-                    console.log("Matched User ID, trying to remove reservations...");
-
-                    // Supprimer le tableau Reservations
                     delete plainItem.Reservations;
-
-                    // Supprimer également les propriétés reserved et reservedBy
                     delete plainItem.reserved;
                     delete plainItem.reservedBy;
                     delete plainItem.bought;
+                    delete plainItem.nbComment;
                 }
 
                 return plainItem;
-            });
+            }));
 
             items.push(...transformedItems);
-
         }
 
         return res.status(200).json(items);
@@ -740,6 +739,7 @@ app.get('/wishlist/:wishlistId/items', verifyJWT, async (req, res) => {
         return res.status(500).json({ message: 'Erreur serveur lors de la récupération des items' });
     }
 });
+
 
 app.delete('/reservation/:itemId', verifyJWT, async (req, res) => {
     try {
