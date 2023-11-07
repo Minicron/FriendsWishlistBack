@@ -783,6 +783,16 @@ app.delete('/item/:itemId', verifyJWT, async (req, res) => {
             { where: { wishlistItem_id: itemId } }
         );
 
+        // Récupérer les commentaires de l'item
+        const comments = await Comment.findAll(
+            { where: { itemId: itemId } }
+        );
+
+        // Supprimer les commentaires
+        for (let comment of comments) {
+            await comment.destroy();
+        }
+
         const wishlistItem = await WishlistItem.findOne(
             { where: { id: itemId } }
         );

@@ -6,12 +6,10 @@ const Wishlist = sequelize.define('Wishlist', {
     name: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: true,
     },
     description: {
         type: DataTypes.STRING,
-        allowNull: false,
-        unique: true,
+        allowNull: true,
     },
     isClosed: {
         type: DataTypes.BOOLEAN,
