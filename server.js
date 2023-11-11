@@ -638,8 +638,39 @@ app.get('/user/wishlist', verifyJWT, async (req, res) => {
             return res.status(404).json({ message: 'Aucune wishlist trouvée pour l\'utilisateur connecté' });
         }
 
-        // Renvoie les wishlists de l'utilisateur en réponse
-        return res.status(200).json(userWithWishlists.Wishlists);
+        for (const wishlist of userWithWishlists.Wishlists) {
+
+            // Récupérer les WishlistUsers associés à la wishlist actuelle
+            const wishlistUsers = await WishlistUser.findAll({
+                where: { wishlist_id: wishlist.id },
+            });
+
+            // Compter le nombre total d'utilisateurs pour cette wishlist
+            wishlist.dataValues.userCount = wishlistUsers.length;
+
+            // Compter le nombre total d'items pour cette wishlist
+            let itemCount = 0;
+            for (const wishlistUser of wishlistUsers) {
+                itemCount += await WishlistItem.count({
+                    where: { wishlistUser_id: wishlistUser.id },
+                });
+            }
+            wishlist.dataValues.itemCount = itemCount;
+        }
+
+        const simplifiedWishlists = userWithWishlists.Wishlists.map(wishlist => ({
+            id: wishlist.id,
+            name: wishlist.name,
+            User: wishlist.User,
+            description: wishlist.description,
+            userCount: wishlist.dataValues.userCount,
+            itemCount: wishlist.dataValues.itemCount,
+            isClosed: wishlist.isClosed,
+            createdAt: wishlist.createdAt,
+            updatedAt: wishlist.updatedAt,
+        }));
+
+        return res.status(200).json(simplifiedWishlists);
 
     } catch (error) {
         console.error('Erreur lors de la récupération des wishlists de l\'utilisateur :', error);
